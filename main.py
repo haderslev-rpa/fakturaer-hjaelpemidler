@@ -7,6 +7,8 @@ from pprint import pprint
 from behandel import behandel_page
 from populate_queue import hent_queue_items
 
+from q_cura.functionality.launch import (launch_cura,)
+
 from automation_server_client import (
     AutomationServer,
     Workqueue,
@@ -17,7 +19,7 @@ from q_haderslev_vbo.automation_server.ats_update_item_data import update_item_d
 from q_haderslev_vbo.automation_server.ats_is_item_in_queue import is_item_in_queue
 from q_haderslev_vbo.playwright.browser_session import BrowserSession
 
-from konfiguration import QUEUE_ID, configure_logging
+from konfiguration import ENABLE_CURA_LUKNING, QUEUE_ID, configure_logging
 
 
 def get_headless_flag():
@@ -135,30 +137,118 @@ async def populate_queue(
     )
 
 
-async def process_workqueue(workqueue: Workqueue, debug: bool):
-    logger = logging.getLogger(__name__)
-    logger.info("Process workqueue mode started (debug=%s)", debug)
+async def process_workqueue(
+    workqueue: Workqueue,
+    debug: bool,
+):
+    """
+    Behandler fakturaer fra Automation Server-køen.
+
+    Der oprettes én fælles browsersession for hele
+    kørslen.
+
+    Hvis CURA-lukning er aktiveret, åbnes og
+    initialiseres CURA, før første item behandles.
+
+    Output:
+        Funktionen returnerer ikke data.
+
+        Hvert item afsluttes enten som:
+        - Completed
+        - Manuel behandling
+        - Failed
+    """
+    logger = logging.getLogger(
+        __name__
+    )
+
+    logger.info(
+        "Process workqueue mode started "
+        "(debug=%s)",
+        debug,
+    )
 
     headless = get_headless_flag()
-    session = BrowserSession(headless=headless, debug=debug)
+
+    session = BrowserSession(
+        headless=headless,
+        debug=debug,
+    )
+
     await session.start()
+
     page = await session.new_page()
 
     try:
+        # CURA åbnes kun, når processen faktisk
+        # skal afslutte ydelser.
+        if ENABLE_CURA_LUKNING:
+            print()
+            print(
+                "[PROCESS] Åbner og initialiserer CURA"
+            )
+
+            await launch_cura(
+                page=page,
+                session=session,
+            )
+
+            print(
+                "[PROCESS] CURA er initialiseret"
+            )
+
+        else:
+            print()
+            print(
+                "[PROCESS] CURA-lukning er slået fra"
+            )
+
+        # Workqueue er iterable.
+        # Hvert item behandles ét ad gangen.
         for item in workqueue:
             with item:
                 data = item.data
+
                 try:
-                    print("==================================== NEXT ITEM ====================================")
-                    pprint(data)
-                    result = await behandel_page(item=item, session=session, page=page)
+                    print()
+                    print(
+                        "=" * 80
+                    )
+                    print(
+                        "NEXT ITEM"
+                    )
+                    print(
+                        "=" * 80
+                    )
+
+                    pprint(
+                        data
+                    )
+
+                    resultat = await behandel_page(
+                        item=item,
+                        session=session,
+                        page=page,
+                    )
+
+                    # Genindlæs itemdata efter behandling.
                     data = item.data
-                    if result:
-                        status = result.get("status", "Completed")
-                        status_code = result.get("status_code", "Færdig")
+
+                    if resultat:
+                        status = resultat.get(
+                            "status",
+                            "Completed",
+                        )
+
+                        status_code = resultat.get(
+                            "status_code",
+                            "Færdig",
+                        )
+
                     else:
                         status = "Completed"
                         status_code = "Færdig"
+
                     update_item_data(
                         data,
                         item=item,
@@ -166,31 +256,133 @@ async def process_workqueue(workqueue: Workqueue, debug: bool):
                         status_code=status_code,
                         state="Completed",
                     )
-                    item.update(data)
-                    item.complete(status)
+
+                    item.update(
+                        data
+                    )
+
+                    item.complete(
+                        status
+                    )
+
+                    print()
+                    print(
+                        "[PROCESS] Item afsluttet"
+                    )
+                    print(
+                        "Reference:",
+                        item.reference,
+                    )
+                    print(
+                        "Status:",
+                        status,
+                    )
+                    print(
+                        "Statuskode:",
+                        status_code,
+                    )
+
                 except WorkItemError as error:
-                    logger.error("WorkItemError for item %s: %s", item.reference, error)
-                    item.fail(str(error))
+                    # Soft error:
+                    # Itemet fejler, men processen kan
+                    # fortsætte med næste item.
+                    logger.error(
+                        "WorkItemError for item %s: %s",
+                        item.reference,
+                        error,
+                    )
+
+                    item.fail(
+                        str(error)
+                    )
+
+                    print()
+                    print(
+                        "[PROCESS] Item fejlede med "
+                        "WorkItemError"
+                    )
+                    print(
+                        "Reference:",
+                        item.reference,
+                    )
+                    print(
+                        "Fejl:",
+                        str(error),
+                    )
+
+                    # Luk den eksisterende browser og
+                    # opret en ny ren browsersession.
                     await session.close()
-                    session = BrowserSession(headless=headless, debug=debug)
+
+                    session = BrowserSession(
+                        headless=headless,
+                        debug=debug,
+                    )
+
                     await session.start()
+
                     page = await session.new_page()
+
+                    # Den nye browser skal logges ind i
+                    # CURA igen, hvis lukning er aktiveret.
+                    if ENABLE_CURA_LUKNING:
+                        print(
+                            "[PROCESS] Geninitialiserer CURA"
+                        )
+
+                        await launch_cura(
+                            page=page,
+                            session=session,
+                        )
+
+                        print(
+                            "[PROCESS] CURA er "
+                            "geninitialiseret"
+                        )
+
                 except Exception as error:
-                    logger.exception("Uventet fejl")
+                    # Hard error:
+                    # Tag screenshot, luk browseren og
+                    # stop processen.
+                    logger.exception(
+                        "Uventet fejl"
+                    )
+
                     try:
-                        if session.context and session.context.pages:
-                            page = session.context.pages[-1]
+                        if (
+                            session.context
+                            and session.context.pages
+                        ):
+                            page = (
+                                session.context.pages[-1]
+                            )
+
                             await session.screenshot(
                                 page,
-                                f"hard_exception_{type(error).__name__}",
+                                (
+                                    "hard_exception_"
+                                    f"{type(error).__name__}"
+                                ),
                                 always=True,
                             )
+
                     except Exception:
-                        logger.warning("Kunne ikke tage screenshot ved hard error")
-                    await session.close()
+                        logger.warning(
+                            "Kunne ikke tage screenshot "
+                            "ved hard error"
+                        )
+
                     raise
+
     finally:
+        # Browsersessionen lukkes både ved normal
+        # afslutning og ved uventede fejl.
         await session.close()
+
+        print()
+        print(
+            "[PROCESS] Browser-session lukket korrekt"
+        )
 
 
 if __name__ == "__main__":

@@ -1,28 +1,114 @@
-"""Playwright-koblingspunkt til senere lukning af ydelse i CURA."""
+"""Luk en ydelse i CURA via q-cura."""
+
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
+
+from playwright.async_api import Page
+
+from q_cura.functionality.afslut_ydelse import (
+    afslut_ydelse,
+)
 
 
 async def luk_ydelse_i_cura(
-    page,
+    page: Page,
+    session: Any,
     borger_id: str,
-    ydelse_id: str,
     ydelsesnavn: str,
-    slutdato: str | None = None,
-) -> dict[str, Any]:
-    """Klargør CURA-lukningen uden at ændre noget endnu.
-
-    Output viser tydeligt, at ydelsen ikke er lukket. Playwright-logikken
-    til URL, valg af ydelse og luk-funktion tilføjes senere i denne fil.
+    leverandoernavn: str,
+) -> dict:
     """
-    values = {
-        "borger_id": str(borger_id or "").strip(),
-        "ydelse_id": str(ydelse_id or "").strip(),
-        "ydelsesnavn": str(ydelsesnavn or "").strip(),
-        "slutdato": str(slutdato or "").strip(),
-    }
-    for key in ("borger_id", "ydelse_id", "ydelsesnavn"):
-        if not values[key]:
-            raise ValueError(f"{key} skal være udfyldt.")
-    return {"klargjort": True, "lukket_i_cura": False, **values}
+    Luk én ydelse i CURA med dags dato.
+
+    Output:
+        Returnerer resultatet direkte fra
+        q_cura.functionality.afslut_ydelse.
+
+        Eksempel:
+
+        {
+            "citizen_id": "...",
+            "ydelse_navn": "...",
+            "leverandoer": "...",
+            "slutdato": "22.09.2026",
+            "status": "afsluttet",
+        }
+    """
+    if page is None:
+        raise ValueError(
+            "page skal være udfyldt."
+        )
+
+    if session is None:
+        raise ValueError(
+            "session skal være udfyldt."
+        )
+
+    borger_id = str(
+        borger_id or ""
+    ).strip()
+
+    ydelsesnavn = str(
+        ydelsesnavn or ""
+    ).strip()
+
+    leverandoernavn = str(
+        leverandoernavn or ""
+    ).strip()
+
+    if not borger_id:
+        raise ValueError(
+            "borger_id skal være udfyldt."
+        )
+
+    if not ydelsesnavn:
+        raise ValueError(
+            "ydelsesnavn skal være udfyldt."
+        )
+
+    if not leverandoernavn:
+        raise ValueError(
+            "leverandoernavn skal være udfyldt."
+        )
+
+    slutdato = date.today()
+
+    print()
+    print("Lukker ydelse i CURA")
+    print(
+        "Ydelse:",
+        ydelsesnavn,
+    )
+    print(
+        "Leverandør:",
+        leverandoernavn,
+    )
+    print(
+        "Slutdato:",
+        slutdato.strftime("%d.%m.%Y"),
+    )
+
+    resultat = await afslut_ydelse(
+        page=page,
+        session=session,
+        citizen_id=borger_id,
+        ydelse_navn=ydelsesnavn,
+        leverandoer=leverandoernavn,
+        slutdato=slutdato,
+        stop_foer_gem=False,
+    )
+
+    if resultat.get("status") != "afsluttet":
+        raise RuntimeError(
+            "CURA bekræftede ikke, at ydelsen "
+            "blev afsluttet. "
+            f"Resultat: {resultat!r}"
+        )
+
+    print(
+        "Ydelsen blev afsluttet i CURA."
+    )
+
+    return resultat

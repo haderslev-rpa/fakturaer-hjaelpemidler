@@ -4,8 +4,9 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
+UDFOER_KONTERING = True
 ENABLE_GODKENDELSE = True
-ENABLE_CURA_LUKNING = False
+ENABLE_CURA_LUKNING = True
 
 PRISME_CREDENTIAL = "API_PRISME365_2"
 PRISME_DOMAIN_SUFFIX = "prisme-365.dk"
@@ -25,12 +26,10 @@ SHAREPOINT_LEVERANDOER_FILE_PATH = (
     "RPA - Processer/fakturaer-hjaelpemidler/"
     "tilladte_leverandoerer.xlsx"
 )
-EXCEL_FAKTURAAFsender_KOLONNE = "Fakturaafsender"
-EXCEL_CVR_KOLONNE = "CVR nr"
+
 
 KONTOSTRENG = "160403030000-530311005-40707-29-"  # Ret til korrekt kontostreng.
 STANDARD_ENHED = "STK"
-UDFOER_KONTERING = True
 BELOEBSTOLERANCE = Decimal("1.00")
 
 STATUS_MANUEL = "Manuel behandling"

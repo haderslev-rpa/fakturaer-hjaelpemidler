@@ -63,7 +63,6 @@ class States:
     BYG_KONTERINGSLINJER = "3.0 Konteringslinjer bygget"
     KONTER_FAKTURA = "3.1 Faktura konteret"
     GODKEND_FAKTURA = "4.0 Faktura godkendt"
-    KLARGOER_CURA_LUKNING = "5.0 CURA-lukning klargjort"
     LUK_YDELSE_I_CURA = "5.1 Ydelse lukket i CURA"
     MANUEL_OIOUBL = "8.1 Manuel - OIOUBL kunne ikke findes entydigt"
     MANUEL_CPR = "8.2 Manuel - CPR er ikke entydigt"
@@ -153,21 +152,43 @@ async def behandel_page(item, session=None, page=None):
         raise
 
     box["rec_id_loc"] = faktura.get("RecIdLoc")
-    document = faktura.get("OIOUBL-dokument")
-    if not isinstance(document, dict):
-        return manuel_behandling(
-            States.MANUEL_OIOUBL,
-            STATUS_CODE_MANUEL_OIOUBL,
-            "OIOUBL-dokumentet kunne ikke findes entydigt.",
+
+    document_path = str(
+        box.get(
+            "dokumentsti",
+            "",
         )
-    document_path = str(document.get("Dokumentsti") or "").strip()
+        or ""
+    ).strip()
+
+    # Reserve til ældre queue-items, hvor
+    # dokumentstien ikke ligger i box.
+    if not document_path:
+        document = faktura.get(
+            "OIOUBL-dokument"
+        )
+
+        if isinstance(
+            document,
+            dict,
+        ):
+            document_path = str(
+                document.get(
+                    "Dokumentsti",
+                    "",
+                )
+                or ""
+            ).strip()
+
     if not document_path:
         return manuel_behandling(
             States.MANUEL_OIOUBL,
             STATUS_CODE_MANUEL_OIOUBL,
             "Dokumentstien til OIOUBL mangler.",
         )
+
     box["dokumentsti"] = document_path
+
     save_box()
     set_state(States.HENT_FAKTURA)
 
@@ -275,17 +296,113 @@ async def behandel_page(item, session=None, page=None):
         )
         set_state(States.GODKEND_FAKTURA)
 
-    result = await luk_ydelse_i_cura(
-        page=page,
-        borger_id=borger_id,
-        ydelse_id=str(service.get("id") or ""),
-        ydelsesnavn=str(service.get("ydelsesnavn") or ""),
-        slutdato=box.get("fakturaperiode_slut"),
-    )
-    if result.get("klargjort"):
-        set_state(States.KLARGOER_CURA_LUKNING)
-    if ENABLE_CURA_LUKNING and result.get("lukket_i_cura"):
-        set_state(States.LUK_YDELSE_I_CURA)
+
+    # ==========================================================
+    # LUK YDELSE I CURA
+    # ==========================================================
+    if ENABLE_CURA_LUKNING:
+        if not har_state(
+            States.LUK_YDELSE_I_CURA
+        ):
+            log_step(
+                "LUK_YDELSE_I_CURA",
+                "Starter afslutning af ydelsen i CURA",
+            )
+
+            resultat_cura_lukning = (
+                await luk_ydelse_i_cura(
+                    page=page,
+                    session=session,
+                    borger_id=borger_id,
+                    ydelsesnavn=str(
+                        service.get(
+                            "ydelsesnavn",
+                            "",
+                        )
+                        or ""
+                    ).strip(),
+                    leverandoernavn=str(
+                        box.get(
+                            "leverandoernavn",
+                            "",
+                        )
+                        or ""
+                    ).strip(),
+                )
+            )
+
+            if not isinstance(
+                resultat_cura_lukning,
+                dict,
+            ):
+                raise RuntimeError(
+                    "luk_ydelse_i_cura returnerede "
+                    "ikke en dictionary."
+                )
+
+            cura_status = str(
+                resultat_cura_lukning.get(
+                    "status",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if cura_status.casefold() != "afsluttet":
+                raise RuntimeError(
+                    "CURA bekræftede ikke, at "
+                    "ydelsen blev afsluttet. "
+                    f"Resultat: "
+                    f"{resultat_cura_lukning!r}"
+                )
+
+            box[
+                "cura_lukning_udfoert"
+            ] = True
+
+            box[
+                "cura_lukning_slutdato"
+            ] = resultat_cura_lukning.get(
+                "slutdato",
+                "",
+            )
+
+            save_box()
+
+            set_state(
+                States.LUK_YDELSE_I_CURA
+            )
+
+            log_step(
+                "LUK_YDELSE_I_CURA",
+                (
+                    "Ydelsen blev afsluttet i CURA "
+                    f"med slutdato "
+                    f"{box['cura_lukning_slutdato']}"
+                ),
+            )
+
+        else:
+            log_step(
+                "LUK_YDELSE_I_CURA",
+                (
+                    "Springer over, da ydelsen "
+                    "allerede er registreret som "
+                    "lukket i state"
+                ),
+            )
+
+    else:
+        log_step(
+            "LUK_YDELSE_I_CURA",
+            (
+                "CURA-lukning er slået fra i "
+                "konfiguration.py"
+            ),
+        )
+
+    # Ingen særlig slutstatus.
+    # main.py markerer itemet som færdigt.
     return None
 
 

@@ -7,16 +7,18 @@ dependencies = [
     "automation-server-client",
     "openpyxl",
     "q-cura-api",
+    "q-cura",
     "q-haderslev-vbo",
     "q-oioubl-faktura-parser",
     "q-prisme365-api",
-    "q-sharepoint-api",
+    "q-sharepoint-api"
 ]
 
 [tool.uv.sources]
 automation-server-client = { git = "https://github.com/odense-rpa/automation-server-client.git", tag = "v0.3.0" }
 q-haderslev-vbo = { git = "https://github.com/haderslev-rpa/q-haderslev-vbo.git", branch = "main" }
 q-cura-api = { git = "https://github.com/haderslev-rpa/q-cura-api.git", branch = "main" }
+q-cura = { git = "https://github.com/haderslev-rpa/q-cura.git", branch = "main" }
 q-oioubl-faktura-parser = { git = "https://github.com/haderslev-rpa/q-oioubl-faktura-parser.git", branch = "main" }
 q-prisme365-api = { git = "https://github.com/haderslev-rpa/q-prisme365-api.git", branch = "main" }
 q-sharepoint-api = { git = "https://github.com/haderslev-rpa/q-sharepoint-api.git", branch = "main" }

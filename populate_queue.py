@@ -13,8 +13,6 @@ from q_sharepoint_api.sp_api import get_client
 
 from konfiguration import (
     AFDELING,
-    EXCEL_CVR_KOLONNE,
-    EXCEL_FAKTURAAFsender_KOLONNE,
     HJALPEMIDLER_EAN,
     PRISME_CREDENTIAL,
     SHAREPOINT_LEVERANDOER_FILE_PATH,
@@ -24,53 +22,162 @@ from konfiguration import (
 logger = logging.getLogger(__name__)
 
 
-def hent_tilladte_leverandoerer() -> list[dict[str, str]]:
-    """Hent Excel fra SharePoint til RAM og returnér leverandørerne.
+def hent_tilladte_leverandoerer() -> list[
+    dict[str, str]
+]:
+    """
+    Hent Excel-filen fra SharePoint til RAM.
+
+    Excel-filen skal indeholde disse faste kolonner:
+
+        Fakturaafsender
+        CVR nr
 
     Output:
-        [{"fakturaafsender": "...", "cvr_nr": "38051040"}, ...]
+        En liste med leverandører:
+
+        [
+            {
+                "fakturaafsender": "...",
+                "cvr_nr": "38051040",
+            }
+        ]
     """
     client = get_client()
-    site_id = client.get_site_id(SHAREPOINT_SITE_NAME)
-    result = client.download_file_to_memory_by_path(
-        site_id=site_id,
-        file_path=SHAREPOINT_LEVERANDOER_FILE_PATH,
-        save_dir=None,
+
+    site_id = client.get_site_id(
+        SHAREPOINT_SITE_NAME
     )
-    file_bytes = result.get("file_bytes")
+
+    result = (
+        client.download_file_to_memory_by_path(
+            site_id=site_id,
+            file_path=(
+                SHAREPOINT_LEVERANDOER_FILE_PATH
+            ),
+            save_dir=None,
+        )
+    )
+
+    file_bytes = result.get(
+        "file_bytes"
+    )
+
     if not file_bytes:
-        raise ValueError("SharePoint-filen blev hentet, men file_bytes er tom.")
+        raise ValueError(
+            "SharePoint-filen blev hentet, "
+            "men file_bytes er tom."
+        )
 
-    workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+    workbook = load_workbook(
+        BytesIO(file_bytes),
+        read_only=True,
+        data_only=True,
+    )
+
     sheet = workbook.active
-    rows = sheet.iter_rows(values_only=True)
+
+    rows = sheet.iter_rows(
+        values_only=True
+    )
+
     try:
-        headers = [str(value or "").strip() for value in next(rows)]
+        headers = [
+            str(value or "").strip()
+            for value in next(rows)
+        ]
+
     except StopIteration as error:
-        raise ValueError("Leverandørfilen er tom.") from error
+        raise ValueError(
+            "Leverandørfilen er tom."
+        ) from error
 
-    required = {EXCEL_FAKTURAAFsender_KOLONNE, EXCEL_CVR_KOLONNE}
-    missing = required.difference(headers)
-    if missing:
-        raise ValueError(f"Leverandørfilen mangler kolonner: {sorted(missing)!r}.")
+    # Kolonnenavnene er faste og er derfor
+    # ikke en del af konfiguration.py.
+    fakturaafsender_kolonne = (
+        "Fakturaafsender"
+    )
 
-    name_index = headers.index(EXCEL_FAKTURAAFsender_KOLONNE)
-    cvr_index = headers.index(EXCEL_CVR_KOLONNE)
+    cvr_kolonne = "CVR nr"
+
+    required_columns = {
+        fakturaafsender_kolonne,
+        cvr_kolonne,
+    }
+
+    missing_columns = (
+        required_columns.difference(
+            headers
+        )
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Leverandørfilen mangler kolonner: "
+            f"{sorted(missing_columns)!r}."
+        )
+
+    name_index = headers.index(
+        fakturaafsender_kolonne
+    )
+
+    cvr_index = headers.index(
+        cvr_kolonne
+    )
+
     suppliers = []
+
     seen = set()
+
     for row in rows:
-        name = str(row[name_index] or "").strip()
-        cvr = _normaliser_cvr(row[cvr_index])
+        name = str(
+            row[name_index]
+            or ""
+        ).strip()
+
+        cvr = _normaliser_cvr(
+            row[cvr_index]
+        )
+
+        # Helt tomme rækker springes over.
         if not name and not cvr:
             continue
+
         if not name or not cvr:
-            raise ValueError("En række i leverandørfilen mangler Fakturaafsender eller CVR nr.")
-        key = (name.casefold(), cvr)
-        if key not in seen:
-            seen.add(key)
-            suppliers.append({"fakturaafsender": name, "cvr_nr": cvr})
+            raise ValueError(
+                "En række i leverandørfilen "
+                "mangler Fakturaafsender "
+                "eller CVR nr."
+            )
+
+        key = (
+            name.casefold(),
+            cvr,
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+
+        suppliers.append(
+            {
+                "fakturaafsender": name,
+                "cvr_nr": cvr,
+            }
+        )
+
     if not suppliers:
-        raise ValueError("Leverandørfilen indeholder ingen gyldige leverandører.")
+        raise ValueError(
+            "Leverandørfilen indeholder "
+            "ingen gyldige leverandører."
+        )
+
+    print(
+        "Tilladte leverandører indlæst:",
+        len(suppliers),
+    )
+
     return suppliers
 
 
