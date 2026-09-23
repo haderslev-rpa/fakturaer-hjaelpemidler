@@ -619,7 +619,7 @@ dependencies = [
 [[package]]
 name = "q-cura-api"
 version = "0.1.0"
-source = { git = "https://github.com/haderslev-rpa/q-cura-api.git?branch=main#90af40a3ff1bc338e34eaa9c8b5f6ecf5d90aeb0" }
+source = { git = "https://github.com/haderslev-rpa/q-cura-api.git?branch=main#cdaac5fe7d7c0edf9fe59d1a34db4feee84fe3b7" }
 dependencies = [
     { name = "automation-server-client" },
     { name = "requests" },
