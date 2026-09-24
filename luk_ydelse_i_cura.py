@@ -31,6 +31,7 @@ async def luk_ydelse_i_cura(
         session=session,
         citizen_id=borger_id,
         ydelse_navn=ydelsesnavn,
+        afslutningsaarsag="Klarer sig selv",
         leverandoer=leverandoernavn,
         slutdato=slutdato,
         stop_foer_gem=False,

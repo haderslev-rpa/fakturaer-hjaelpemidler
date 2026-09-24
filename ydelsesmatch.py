@@ -18,63 +18,182 @@ def find_organisation_ids(
     leverandoernavn_prisme: str,
     leverandoernavn_oioubl: str,
 ) -> dict[str, Any]:
-    """Find leverandørens organisation-id'er og id'et til Frit valg.
+    """
+    Find relevante CURA-organisationer.
+
+    Funktionen søger blandt alle organisationer, der
+    begynder med "(Hjælpemidler)".
+
+    Der søges efter organisationer, som matcher enten:
+
+    - leverandørnavnet fra Prisme
+    - leverandørnavnet fra OIOUBL
+
+    Derudover findes organisationen:
+
+        "(Hjælpemidler) Frit valg"
 
     Output:
-        Dictionary med leverandoer_organization_ids og
-        frit_valg_organization_id.
+        {
+            "leverandoer_organization_ids": {
+                "organization-id",
+            },
+            "frit_valg_organization_id": (
+                "organization-id"
+            ),
+            "organization_names_by_id": {
+                "organization-id": (
+                    "(Hjælpemidler) Leverandørnavn"
+                ),
+            },
+        }
     """
     result = get_organizations(
         "*(Hjælpemidler)*",
         raw=False,
         include_inactive=True,
     )
-    if not isinstance(result, dict):
-        raise TypeError("get_organizations skal returnere en dictionary.")
 
-    organizations = result.get("organizationer", [])
-    if not isinstance(organizations, list):
-        raise TypeError("Feltet 'organizationer' skal være en liste.")
+    if not isinstance(
+        result,
+        dict,
+    ):
+        raise TypeError(
+            "get_organizations skal returnere "
+            "en dictionary."
+        )
 
-    invoice_names = [
-        value for value in (
-            str(leverandoernavn_prisme or "").strip(),
-            str(leverandoernavn_oioubl or "").strip(),
-        ) if value
+    organizations = result.get(
+        "organizationer",
+        [],
+    )
+
+    if not isinstance(
+        organizations,
+        list,
+    ):
+        raise TypeError(
+            "Feltet 'organizationer' skal "
+            "være en liste."
+        )
+
+    invoice_supplier_names = [
+        supplier_name
+        for supplier_name in (
+            str(
+                leverandoernavn_prisme
+                or ""
+            ).strip(),
+            str(
+                leverandoernavn_oioubl
+                or ""
+            ).strip(),
+        )
+        if supplier_name
     ]
-    if not invoice_names:
-        raise ValueError("Leverandørnavnet mangler både i Prisme og OIOUBL.")
 
-    supplier_ids: set[str] = set()
-    free_choice_ids: list[str] = []
+    if not invoice_supplier_names:
+        raise ValueError(
+            "Leverandørnavnet mangler både "
+            "i Prisme og OIOUBL."
+        )
+
+    supplier_organization_ids: set[str] = set()
+
+    free_choice_organization_ids: list[str] = []
+
+    organization_names_by_id: dict[str, str] = {}
 
     for organization in organizations:
-        if not isinstance(organization, dict):
+        if not isinstance(
+            organization,
+            dict,
+        ):
             continue
-        name = str(organization.get("name") or "").strip()
-        organization_id = str(organization.get("organization_id") or "").strip()
-        if not name or not organization_id:
+
+        organization_name = str(
+            organization.get(
+                "name",
+                "",
+            )
+            or ""
+        ).strip()
+
+        organization_id = str(
+            organization.get(
+                "organization_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if (
+            not organization_name
+            or not organization_id
+        ):
             continue
 
-        if _normaliser_organisation(name) == _normaliser_organisation(FRIT_VALG_NAVN):
-            free_choice_ids.append(organization_id)
+        # Gem det præcise navn fra CURA.
+        organization_names_by_id[
+            organization_id
+        ] = organization_name
 
-        if any(_leverandoer_matcher(invoice_name, name) for invoice_name in invoice_names):
-            supplier_ids.add(organization_id)
+        if (
+            _normaliser_organisation(
+                organization_name
+            )
+            == _normaliser_organisation(
+                FRIT_VALG_NAVN
+            )
+        ):
+            free_choice_organization_ids.append(
+                organization_id
+            )
 
-    if len(free_choice_ids) != 1:
+        if any(
+            _leverandoer_matcher(
+                invoice_supplier_name,
+                organization_name,
+            )
+            for invoice_supplier_name
+            in invoice_supplier_names
+        ):
+            supplier_organization_ids.add(
+                organization_id
+            )
+
+    if len(
+        free_choice_organization_ids
+    ) != 1:
         raise ValueError(
-            f"Der forventes præcis én CURA-organisation med navnet {FRIT_VALG_NAVN!r}. "
-            f"Fundet: {len(free_choice_ids)}."
+            "Der forventes præcis én "
+            "CURA-organisation med navnet "
+            f"{FRIT_VALG_NAVN!r}. "
+            "Fundet: "
+            f"{len(free_choice_organization_ids)}."
         )
 
     logger.info(
-        "CURA-organisationer fundet: %s leverandør-id(er), Frit valg-id fundet",
-        len(supplier_ids),
+        (
+            "CURA-organisationer fundet: "
+            "%s leverandør-id(er) samt "
+            "Frit valg-id"
+        ),
+        len(
+            supplier_organization_ids
+        ),
     )
+
     return {
-        "leverandoer_organization_ids": supplier_ids,
-        "frit_valg_organization_id": free_choice_ids[0],
+        "leverandoer_organization_ids": (
+            supplier_organization_ids
+        ),
+        "frit_valg_organization_id": (
+            free_choice_organization_ids[0]
+        ),
+        "organization_names_by_id": (
+            organization_names_by_id
+        ),
     }
 
 

@@ -609,7 +609,7 @@ wheels = [
 [[package]]
 name = "q-cura"
 version = "0.1.0"
-source = { git = "https://github.com/haderslev-rpa/q-cura.git?branch=main#fd80c9687683d892558a0451b98a3d59daab82c2" }
+source = { git = "https://github.com/haderslev-rpa/q-cura.git?branch=main#349b937de22b9ea4b10a7f35e33ddb28a11b0234" }
 dependencies = [
     { name = "automation-server-client" },
     { name = "playwright" },

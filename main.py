@@ -57,12 +57,34 @@ async def populate_queue(workqueue: Workqueue, debug: bool):
 async def process_workqueue(workqueue: Workqueue, debug: bool):
     logger = logging.getLogger(__name__)
     headless = get_headless_flag()
-    session = BrowserSession(headless=headless, debug=debug)
+    session = BrowserSession(
+        headless=headless,
+        debug=debug,
+    )
+
     await session.start()
+
     page = await session.new_page()
+
     try:
         if ENABLE_CURA_LUKNING:
-            await launch_cura(page=page, session=session)
+            logger.info(
+                "Åbner CURA før behandling "
+                "af første item"
+            )
+
+            await launch_cura(
+                page=page,
+                session=session,
+            )
+
+            logger.info(
+                "CURA er åbnet og klar"
+            )
+
+
+
+
         for item in workqueue:
             with item:
                 try:
