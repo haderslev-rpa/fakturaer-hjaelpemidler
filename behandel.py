@@ -523,32 +523,64 @@ async def _luk_matchet_ydelse(
     organization_id: str,
     cura_supplier_name: str,
 ) -> None:
-    """Luk ydelsen med den organisation, som API-matchningen valgte."""
-    service_name = str(service.get("ydelsesnavn") or "").strip()
-    if not service_name:
-        raise ValueError("Den matchede CURA-ydelse mangler ydelsesnavn.")
+    """
+    Luk ydelsen med den organisation og de bemærkninger,
+    som API-matchningen valgte.
+    """
+    service_name = str(
+        service.get("ydelsesnavn") or ""
+    ).strip()
 
-    organization_id = str(organization_id or "").strip()
-    cura_supplier_name = str(cura_supplier_name or "").strip()
+    if not service_name:
+        raise ValueError(
+            "Den matchede CURA-ydelse mangler ydelsesnavn."
+        )
+
+    organization_id = str(
+        organization_id or ""
+    ).strip()
+
+    cura_supplier_name = str(
+        cura_supplier_name or ""
+    ).strip()
+
     if not organization_id or not cura_supplier_name:
         raise ValueError(
-            "Den matchede CURA-ydelses organisation mangler id eller navn."
+            "Den matchede CURA-ydelses organisation "
+            "mangler id eller navn."
         )
+
+    service_remarks = str(
+        service.get("bemærkninger")
+        if service.get("bemærkninger") is not None
+        else ""
+    )
 
     logger.info(
         "Lukker CURA-ydelse med matchet organisation: %s",
         cura_supplier_name,
     )
+
+    logger.info(
+        "CURA-ydelsen vælges også ud fra bemærkninger: %r",
+        service_remarks,
+    )
+
     result = await luk_ydelse_i_cura(
         page=page,
         session=session,
         borger_id=borger_id,
         ydelsesnavn=service_name,
         leverandoernavn=cura_supplier_name,
+        bemaerkninger=service_remarks,
     )
-    if not isinstance(result, dict) or str(
-        result.get("status") or ""
-    ).casefold() != "afsluttet":
+
+    if (
+        not isinstance(result, dict)
+        or str(
+            result.get("status") or ""
+        ).casefold() != "afsluttet"
+    ):
         raise RuntimeError(
             "CURA bekræftede ikke afslutningen. "
             f"Resultat: {result!r}"
