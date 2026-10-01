@@ -26,6 +26,9 @@ async def luk_ydelse_i_cura(
     Bemærkninger bruges til at vælge den korrekte ydelse,
     hvis flere ydelser har samme navn og leverandør.
 
+    Afslutningsårsagen sættes til "Klarer sig selv", som
+    i den oprindelige proceskode.
+
     Output:
         Returnerer resultatet fra q-cura-funktionen
         afslut_ydelse().
@@ -35,8 +38,14 @@ async def luk_ydelse_i_cura(
             "page og session skal være angivet ved CURA-lukning."
         )
 
-    borger_id = str(borger_id or "").strip()
-    ydelsesnavn = str(ydelsesnavn or "").strip()
+    borger_id = str(
+        borger_id or ""
+    ).strip()
+
+    ydelsesnavn = str(
+        ydelsesnavn or ""
+    ).strip()
+
     leverandoernavn = str(
         leverandoernavn or ""
     ).strip()
@@ -62,13 +71,27 @@ async def luk_ydelse_i_cura(
             "leverandoernavn mangler ved CURA-lukning."
         )
 
-    return await afslut_ydelse(
+    result = await afslut_ydelse(
         page=page,
         session=session,
         citizen_id=borger_id,
         ydelse_navn=ydelsesnavn,
         leverandoer=leverandoernavn,
         bemaerkninger=bemaerkninger,
+        afslutningsaarsag="Klarer sig selv",
         slutdato=date.today(),
         stop_foer_gem=False,
     )
+
+    if (
+        not isinstance(result, dict)
+        or str(
+            result.get("status") or ""
+        ).casefold() != "afsluttet"
+    ):
+        raise RuntimeError(
+            "CURA bekræftede ikke afslutningen. "
+            f"Resultat: {result!r}"
+        )
+
+    return result
