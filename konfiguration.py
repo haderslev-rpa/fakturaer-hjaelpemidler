@@ -5,7 +5,7 @@ import logging
 from decimal import Decimal
 
 UDFOER_KONTERING = True
-ENABLE_GODKENDELSE = False
+ENABLE_GODKENDELSE = True
 ENABLE_CURA_LUKNING = True
 
 PRISME_CREDENTIAL = "API_PRISME365_2"
